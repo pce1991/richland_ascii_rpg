@@ -1,0 +1,7 @@
+C:\Users\pce\source\repos\richland_rpg\richland_rpg\obj\Debug\richland_rpg.csprojAssemblyReference.cache
+C:\Users\pce\source\repos\richland_rpg\richland_rpg\obj\Debug\richland_rpg.csproj.CoreCompileInputs.cache
+C:\Users\pce\source\repos\richland_rpg\richland_rpg\bin\Debug\richland_rpg.exe.config
+C:\Users\pce\source\repos\richland_rpg\richland_rpg\bin\Debug\richland_rpg.exe
+C:\Users\pce\source\repos\richland_rpg\richland_rpg\bin\Debug\richland_rpg.pdb
+C:\Users\pce\source\repos\richland_rpg\richland_rpg\obj\Debug\richland_rpg.exe
+C:\Users\pce\source\repos\richland_rpg\richland_rpg\obj\Debug\richland_rpg.pdb
