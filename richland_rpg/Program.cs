@@ -20,46 +20,6 @@ namespace richland_rpg
        Blah blah bleh
        <PATH Hallway>
        <PATH Bedroom>
-
-       I bet they could do a sokoban right? 
-       3 things: blocks that can be pushed
-                 Walls you can't move past
-                 Plate you have to stand on
-
-       struct Level {
-            int wallCount;
-            Vector2[] wallPositions;
-            int blockCount;
-            Vector2[] blockPositions;
-            
-            Vector2 playerPosition;
-            Vector2 homePlatePosition;
-
-            Vector2 levelDimensions;
-
-            void SetupLevel0() {
-                 levelDimensions = new Vector2(15, 15);
-                 playerPosition = new Vector2(5, 5)
-                 ...
-            }
-       }
-
-
-       Level[] levels = new Level[levelCount];
-       
-       levels[0].SetupLevel0();
-       ....
-
-       int levelIndex = 0;
-       Level currentLevel = levels[levelIndex];
-       if (GameMath.Equals(currentLevel.playerPosition, currentLevel.homePlatePosition)) {
-           levelIndex++;
-       }
-
-       // Restart key so you should be storing copies of the positions (do you need to store walls?)
-
-       // If you push a block into a wall, the block shouldn't go into the wall, and also you shouldn't go into the block.
-       // So if you push a block that gets stopped your move becomes invalid
     */
 
     // Generate a world
@@ -245,6 +205,135 @@ namespace richland_rpg
         }
     }
 
+
+    struct Entity
+    {
+        public int id;
+        public int generation;
+    }
+
+
+    class EntityManager {
+        int nextID;
+
+        List<Entity> entities;
+        List<int> freeList;
+        List<Entity> entitiesToDelete;
+
+        public Entity AddEntity() {
+            if (freeList.Count == 0) {
+                int index = freeList[freeList.Count - 1];
+                return entities[index];
+            }
+            else {
+                Entity e = new Entity();
+                e.id = ++nextID;
+                e.generation = 0;
+                entities.Add(e);
+                return entities[entities.Count - 1];
+            }
+        }
+
+        public void DeleteEntity(Entity e) {
+            if (EntityIsValid(e)) {
+                entitiesToDelete.Add(e);
+            }
+        }
+
+        public bool EntityIsValid(Entity e) {
+            if (e.id > 0 && e.id < nextID) {
+                if (e.generation == entities[e.id].generation) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public void DeleteEntities() {
+            for (int i = 0; i < entitiesToDelete.Count; i++) {
+                Entity e = entitiesToDelete[i];
+
+                freeList.Add(e.id);
+                e.generation++;
+                entities[e.id] = e;
+
+                // @TODO: remove the objects from some array, maybe easier if we just
+                // inherit from entity
+            }
+        }
+    }
+
+    // Given an entity we need to know where to look it up!
+    // We can cast child to parent and store things that way
+    // The problem is how do we go from that parent back to the child
+    // So I think we need to store an enum type on the entity so we know
+    // where to look it up.
+
+    struct Renderable {
+        public char symbol;
+    };
+
+    struct Player {
+        public Entity entity;
+        public Vector2 position;
+        public Renderable renderable;
+        
+        public int health;
+        public int strength;
+
+        // @TODO: weapon
+
+        Player(Vector2 pos) {
+            position = pos;
+
+            renderable.symbol = '@';
+
+            health = 100;
+            strength = 10;
+
+            entity = new Entity();
+        }
+
+        public void Add(EntityManager entityManager) {
+            entity = entityManager.AddEntity();
+        }
+    }
+
+    struct Cougar {
+        public Vector2 position;
+        public Renderable renderable;
+        
+        public int health;
+        public int strength;
+
+        Cougar(Vector2 pos) {
+            position = pos;
+
+            renderable.symbol = 'C';
+
+            health = 150;
+            strength = 20;
+        }
+    }
+
+    struct Rat {
+        public Vector2 position;
+        public Renderable renderable;
+        
+        public int health;
+        public int strength;
+        
+        Rat(Vector2 pos) {
+            position = pos;
+
+            renderable.symbol = 'R';
+
+            health = 25;
+            strength = 5;
+        }
+    }
+
     class Game
     {
         bool running = true;
@@ -271,8 +360,6 @@ namespace richland_rpg
 
         int playerID;
         int cougarID;
-
-        int nextID;
 
         public Game()
         {
@@ -310,40 +397,6 @@ namespace richland_rpg
         DynamicArray<Entity> entities;
         DynamicArray<int> entityFreeList;
 
-
-        struct Entity
-        {
-            int id;
-            int generation;
-
-            // Wanna do this in a manager for various static reasons and things
-            // Constructor does not seem like the right place, do this inside manager or whatever?
-            /*Entity()
-            {
-                if (entityFreeList.count == 0)
-                {
-                    id = ++nextID;
-                    generation++;
-                }
-                else
-                {
-                    Entity prevDeleted = entities[entityFreeList.Last()];
-                    id = prevDeleted.id;
-                    generation = prevDeleted.generation;
-                    entities[id] = this;
-                    // BAD
-                }
-            }
-            */
-
-                /*
-            void DestroyEntity()
-            {
-                generation++;
-                entityFreeList.PushBack(id);
-            }
-            */
-        }
 
         // An alternative to this idea is to make structs and store them in some way, it would be a MAJOR rewrite tho if we ever need dynamically added components
         /*
@@ -870,9 +923,19 @@ namespace richland_rpg
     }
 
     class Program
-    {
+    {  
+
+        struct foo
+        {
+
+            int ax;
+        }
+
+  
         static void Main(string[] args)
         {
+
+
             Game game = new Game();
             game.GenerateObstacles(25);
             game.PlacePlayer();
