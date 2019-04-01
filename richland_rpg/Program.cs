@@ -6,96 +6,6 @@ using System.Threading.Tasks;
 
 namespace richland_rpg
 {
-    /*
-       Create a struct and have them implement things using it. 
-       Make their own structs and handle working with those
-
-       Randomly generate some obstacles, maybe randomly choose a certain pattern
-       Find a position to place it, but don't do everything randomly 
-       Have a cursor that's moving left->right up -> down (this avoids placing things in the same spot)
-
-       Room program could use file i/o and parsing
-       <NAME = Hallway>
-       <Desc>
-       Blah blah bleh
-       <PATH Hallway>
-       <PATH Bedroom>
-    */
-
-    // Generate a world
-    // Move around in open world
-    // Better mapping between IDs, indices, and types
-    // Put things in a camera to draw them
-
-    /*
-     * Open world
-     * 
-     * GAME ENGINE ARCHITECTURE
-     * some game data
-     *    Player (position, health)
-     *    Enemies (positions, health, various)
-     *    World data (buildings, dungeons, forests, fields)
-     *    Some text to describe what's happening (responds to events)
-     *    Characters (position, health, dialogue)
-     *    Elements and effects
-     *    Randomly generated
-     *    Save progress (file I/O)
-     * Game Loop
-     *   keep track of the time
-     *   input
-     *   simulation (other loops, conditions, score/stats)
-     *   render
-     * */
-
-    // IDK just use lists? I kinda wanna preview that they can do this themselves
-    public class DynamicArray<T>
-    {
-        T[] items;
-        int capacity;
-
-        public int count;
-
-        public T this[int i]
-        {
-            get { return items[i]; }
-            set { items[i] = value; }
-        }
-
-        void EnsureCapacity()
-        {
-            if (count + 1 > capacity)
-            {
-                capacity *= 2;
-
-                items = new T[capacity];
-            }
-        }
-
-        public void Clear()
-        {
-            count = 0;
-        }
-
-        public void PushBack(T item)
-        {
-            EnsureCapacity();
-
-            items[count] = item;
-            count++;
-        }
-
-        public T PopBack()
-        {
-            count--;
-            return items[count];
-        }
-
-        public DynamicArray(int capacity_)
-        {
-            capacity = capacity_;
-            items = new T[capacity];
-        }
-    }
 
     // A struct is not allocated on the heap the way 
     // a class is. It is allocated on the Stack
@@ -160,52 +70,23 @@ namespace richland_rpg
             result.y -= b.y;
             return result;
         }
+        
+        static public int Max(int a, int b) {
+             if (a > b) { return a; } 
+             else { return b; }
+        }
+       
+        static public int Min(int a, int b) {
+            if (a < b) { return a; }
+            else { return b; }
+        }
 
         static public bool PointOnAxisAlignedSegment(Vector2 a, Vector2 b, Vector2 p)
         {
-            int maxX;
-            int minX;
-            int minY;
-            int maxY;
-
-            if (a.x > b.x)
-            {
-                maxX = a.x;
-            }
-            else
-            {
-                maxX = b.x;
-            }
-
-
-            if (a.x < b.x)
-            {
-                minX = a.x;
-            }
-            else
-            {
-                minX = b.x;
-            }
-
-            if (a.y > b.y)
-            {
-                maxY = a.y;
-            }
-            else
-            {
-                maxY = b.y;
-            }
-
-
-            if (a.y < b.y)
-            {
-                minY = a.y;
-            }
-            else
-            {
-                minY = b.y;
-            }
-
+            int maxX = Max(a.x, b.x);
+            int minX = Min(a.x, b.x);
+            int minY = Max(a.y, b.y);
+            int maxY = Min(a.y, b.y);
 
             if (p.x >= minX && p.x <= maxX &&
                 p.y >= maxY && p.y <= minY)
@@ -371,6 +252,7 @@ namespace richland_rpg
     }
 
     struct Camera {
+        // @NOTE: this is assumed to be the top left of the rect defined by this and dimensions
         public Vector2 position;
         public Vector2 dimensions;
     }
