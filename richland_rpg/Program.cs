@@ -352,6 +352,11 @@ namespace richland_rpg
             EntityHandle handle = AddEntity(EntityType.Grass, grass.Count);
             grass.Add(g);
         }
+
+        public void AddPlayer(Player p) {
+            EntityHandle handle = AddEntity(EntityType.Player, 0);
+            player = p;
+        }
     }
 
     struct Camera {
@@ -439,6 +444,8 @@ namespace richland_rpg
                 TryAddToRenderables(camera, g.position, g.renderable, Layer.Floor);
             }
 
+            TryAddToRenderables(camera, manager.player.position, manager.player.renderable, Layer.Ground);
+
             // Set all the layers to None so it's easy to automatically override
         }
 
@@ -468,7 +475,7 @@ namespace richland_rpg
 
         // @TODO: weapon
 
-        Player(Vector2 pos) {
+        public Player(Vector2 pos) {
             position = pos;
 
             renderable.symbol = '@';
@@ -611,6 +618,9 @@ namespace richland_rpg
 
         void GenerateWorld() {
             GenerateGrass();
+
+            Player p = new Player(new Vector2(5, 5));
+            entityManager.AddPlayer(p);
         }
 
         void GenerateGrass() {
