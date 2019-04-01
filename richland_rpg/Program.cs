@@ -121,6 +121,18 @@ namespace richland_rpg
         }
     }
 
+    struct Rect {
+        // @NOTE: position is topLeft
+        public Vector2 position;
+        public Vector2 dimensions;
+
+        Rect(Vector2 pos, Vector2 dim) {
+            position = pos;
+            dimensions = dim;
+        }
+
+    }
+
     static class GameMath
     {
         static public bool Equals(Vector2 a, Vector2 b)
@@ -203,48 +215,115 @@ namespace richland_rpg
 
             return false;
         }
+
+
+        public static bool PointInRect(Vector2 topLeft, Vector2 dimensions, Vector2 position) {
+            bool withinWidth  = position.x >= topLeft.x && position.x <= topLeft.x + dimensions.x;
+            bool withinHeight = position.y >= topLeft.y && position.y <= topLeft.y + dimensions.y;
+
+            return withinWidth && withinHeight;
+        }
     }
 
+    enum EntityType {
+        Player,
+        Character,
+        Cougar,
+        Item,
+        Grass,
+    }
 
     struct Entity
     {
         public int id;
+
+        
         public int generation;
+
+        // @NOTE: this is the index into the array based on type
+        public int index;
+        public EntityType type;
+
+        public void IncGeneration() {
+            generation++;
+        }
+
+        public void SetType(EntityType newType) {
+            type = newType;
+        }
+
+        public void SetIndex(int i) {
+            index = i;
+        }
+    }
+
+    struct EntityHandle {
+        public int index;
+        // @NOTE: generation 0 is an invalid handle
+        public int generation;
+
+        public bool IsValid() {
+            if (generation == 0) {
+                return false;
+            }
+
+            return true;
+        }
     }
 
 
     class EntityManager {
         int nextID;
 
-        List<Entity> entities;
-        List<int> freeList;
-        List<Entity> entitiesToDelete;
+        List<Entity> entities = new List<Entity>(2048);
+        List<int> freeList = new List<int>(256);
+        List<int> entitiesToDelete = new List<int>(256);
 
-        public Entity AddEntity() {
-            if (freeList.Count == 0) {
+        public EntityHandle AddEntity(EntityType type, int typeIndex) {
+            if (freeList.Count > 0) {
                 int index = freeList[freeList.Count - 1];
-                return entities[index];
+
+                entities[index].SetType(type);
+                entities[index].SetIndex(index);
+                
+                EntityHandle handle = new EntityHandle();
+                handle.index = typeIndex;
+                handle.generation = entities[index].generation;
+
+                return handle;
             }
             else {
                 Entity e = new Entity();
                 e.id = ++nextID;
-                e.generation = 0;
+                e.generation = 1;
+                e.type = type;
+                e.index = typeIndex;
                 entities.Add(e);
-                return entities[entities.Count - 1];
+
+                EntityHandle handle = new EntityHandle();
+                handle.index = entities.Count - 1;
+                handle.generation = 0;
+                return handle;
             }
         }
 
-        public void DeleteEntity(Entity e) {
-            if (EntityIsValid(e)) {
-                entitiesToDelete.Add(e);
+        public void DeleteEntity(EntityHandle handle) {
+            if (EntityHandleIsValid(handle)) {
+                entitiesToDelete.Add(handle.index);
             }
         }
 
-        public bool EntityIsValid(Entity e) {
-            if (e.id > 0 && e.id < nextID) {
-                if (e.generation == entities[e.id].generation) {
-                    return true;
-                }
+        // @NOTE: this is different from handle.IsValid() because this needs to check
+        // to see if an entity of this generation still exists, which we cant do on the
+        // IsValid() because we don't have a reference to the database (and dont want one)
+        public bool EntityHandleIsValid(EntityHandle handle) {
+            if (handle.index > entities.Count) {
+                return false;
+            }
+            Entity e = entities[handle.index];
+
+            if (handle.generation == e.generation) {
+                return true;
             }
 
             return false;
@@ -252,15 +331,119 @@ namespace richland_rpg
 
         public void DeleteEntities() {
             for (int i = 0; i < entitiesToDelete.Count; i++) {
-                Entity e = entitiesToDelete[i];
+                int index = entitiesToDelete[i];
+                Entity e = entities[index];
 
-                freeList.Add(e.id);
-                e.generation++;
-                entities[e.id] = e;
+                freeList.Add(index);
 
+                // @NOTE: we increase the generation on delete so any handles
+                // we have are now invalid because their generation no longer matches
+                entities[index].IncGeneration();
                 // @TODO: remove the objects from some array, maybe easier if we just
                 // inherit from entity
             }
+        }
+
+        public Player player;
+        public List<Cougar> cougars = new List<Cougar>(64);
+        public List<Grass> grass = new List<Grass>(500);
+
+        public void AddGrass(Grass g) {
+            EntityHandle handle = AddEntity(EntityType.Grass, grass.Count);
+            grass.Add(g);
+        }
+    }
+
+    struct Camera {
+        public Vector2 position;
+        public Vector2 dimensions;
+    }
+
+    enum Layer {
+        None,
+        Floor,
+        Ground,
+        Sky,
+    }
+
+    class Renderer {
+        int width;
+        int height;
+        char[] characters;
+
+        struct RenderData {
+            public Vector2 position;
+            public Layer layer;
+            public char c;
+        }
+
+        RenderData[] renderData;
+
+        public Renderer(int w, int h) {
+            width = w;
+            height = h;
+            characters = new char[(width * height) + (height * 2)];
+            renderData = new RenderData[width * height];
+
+            for (int y = 0; y < height; y++) {
+                characters[y * (width + 2) + width + 0] = '\n';
+                characters[y * (width + 2) + width + 1] = '\r';
+            }
+        }
+
+        bool ShouldOverwriteLayer(Layer a, Layer b) {
+            if (b == Layer.None) {
+                return true;
+            }
+
+            if (b == Layer.Floor) {
+                return a == Layer.Ground || a == Layer.Sky;
+            }
+            if (b == Layer.Ground) {
+                return a == Layer.Sky;
+            }
+            
+            // @NOTE: we sholud never get a tie anyway because two things at the same layer
+            // shoud collide
+            return false;
+        }
+
+        void TryAddToRenderables(Camera camera, Vector2 point, Renderable renderable, Layer layer) {
+            if (GameMath.PointInRect(camera.position, camera.dimensions, point)) {
+                // @TODO: all relative to top left of camera
+                RenderData data = new RenderData();
+
+                data.position = GameMath.Sub(point, camera.position);
+                data.c = renderable.symbol;
+                data.layer = layer;
+
+                // @NOTE: this index needs to take into account the fact that we have
+                // an extra character on each now for the newline
+                int characterIndex = data.position.x + (data.position.y * (width + 2));
+                int dataIndex = data.position.x + (data.position.y * width);
+
+                if (ShouldOverwriteLayer(layer, renderData[dataIndex].layer)) {
+                    renderData[dataIndex] = data;
+                
+                    characters[characterIndex] = data.c;
+                }
+                
+            }
+        }
+
+        public void GatherRenderables(EntityManager manager, Camera camera) {
+
+            for (int i = 0; i < manager.grass.Count; i++) {
+                Grass g = manager.grass[i];
+
+                TryAddToRenderables(camera, g.position, g.renderable, Layer.Floor);
+            }
+
+            // Set all the layers to None so it's easy to automatically override
+        }
+
+        public void Render() {
+            Console.WriteLine(characters);
         }
     }
 
@@ -275,7 +458,8 @@ namespace richland_rpg
     };
 
     struct Player {
-        public Entity entity;
+        public EntityHandle entityHandle;
+
         public Vector2 position;
         public Renderable renderable;
         
@@ -292,15 +476,18 @@ namespace richland_rpg
             health = 100;
             strength = 10;
 
-            entity = new Entity();
+            entityHandle = new EntityHandle();
         }
 
         public void Add(EntityManager entityManager) {
-            entity = entityManager.AddEntity();
+            entityHandle = entityManager.AddEntity(EntityType.Player, 0);
         }
     }
 
     struct Cougar {
+        // @GACK: id like to get rid of this... not sure if it's gonna be needed
+        EntityHandle entityHandle;
+
         public Vector2 position;
         public Renderable renderable;
         
@@ -314,6 +501,16 @@ namespace richland_rpg
 
             health = 150;
             strength = 20;
+
+            entityHandle = new EntityHandle();
+        }
+
+        public void Add(EntityManager entityManager) {
+            entityHandle = entityManager.AddEntity(EntityType.Cougar, entityManager.cougars.Count);
+            // @TODO: need to set the index of data on the entity
+            // @GACK: kinda weird we allocate a cougar in some code and then we
+            // add it to the manager
+            entityManager.cougars.Add(this);
         }
     }
 
@@ -331,6 +528,17 @@ namespace richland_rpg
 
             health = 25;
             strength = 5;
+        }
+    }
+
+    struct Grass {
+        public Vector2 position;
+        public Renderable renderable;
+
+        public Grass(Vector2 pos) {
+            position = pos;
+
+            renderable.symbol = '/';
         }
     }
 
@@ -361,12 +569,18 @@ namespace richland_rpg
         int playerID;
         int cougarID;
 
+        EntityManager entityManager;
+        Renderer renderer;
+
         public Game()
         {
             random = new MyRandom();
             random.Seed(1001);
 
             screenDimensions = new Vector2(24, 16);
+
+            entityManager = new EntityManager();
+            renderer = new Renderer(screenDimensions.x, screenDimensions.y);
 
             playerHealth = 100;
             playerStrength = 2;
@@ -391,12 +605,28 @@ namespace richland_rpg
 
             playerID = 1;
             cougarID = 3;
+
+            GenerateWorld();
         }
 
+        void GenerateWorld() {
+            GenerateGrass();
+        }
 
-        DynamicArray<Entity> entities;
-        DynamicArray<int> entityFreeList;
+        void GenerateGrass() {
+            Vector2 cursorPosition = new Vector2(0, 0);
+            Grass grass = new Grass(cursorPosition);
 
+            for (int y = 0; y < screenDimensions.y; y++) {
+                for (int x = 0; x < screenDimensions.x; x++) {
+                    cursorPosition.x = x;
+                    cursorPosition.y = y;
+
+                    grass.position = new Vector2(cursorPosition);
+                    entityManager.AddGrass(grass);
+                }
+            }
+        }
 
         // An alternative to this idea is to make structs and store them in some way, it would be a MAJOR rewrite tho if we ever need dynamically added components
         /*
@@ -801,42 +1031,48 @@ namespace richland_rpg
                 // Render
                 Console.Clear();
 
-                // Instead of this just put things in a string and print it
-                Vector2 cursorPosition = new Vector2(0, 0);
-                for (int y = 0; y < screenDimensions.y; y++)
-                {
-                    for (int x = 0; x < screenDimensions.x; x++)
-                    {
-                        cursorPosition.x = x;
-                        cursorPosition.y = y;
+                Camera camera = new Camera();
+                camera.dimensions = new Vector2(screenDimensions);
+                renderer.GatherRenderables(entityManager, camera);
+                renderer.Render();
 
-                        if (GameMath.Equals(playerPosition, cursorPosition))
-                        {
-                            Console.Write("@");
-                        }
-                        else if (ratHealths[0] > 0 && GameMath.Equals(ratPositions[0], cursorPosition))
-                        {
-                            Console.Write("R");
-                        }
-                        else if (ratHealths[1] > 0 && GameMath.Equals(ratPositions[1], cursorPosition))
-                        {
-                            Console.Write("R");
-                        }
-                        else if (cougarHealth > 0 && GameMath.Equals(cougarPosition, cursorPosition))
-                        {
-                            Console.Write("C");
-                        }
-                        else if (ObstacleAtPosition(cursorPosition, obstacles, obstacleCount))
-                        {
-                            Console.Write("#");
-                        }
-                        else
-                        {
-                            Console.Write(".");
-                        }
-                    }
-                    Console.WriteLine();
-                }
+                // Instead of this just put things in a string and print it
+
+                /* Vector2 cursorPosition = new Vector2(0, 0); */
+                /* for (int y = 0; y < screenDimensions.y; y++) */
+                /* { */
+                /*     for (int x = 0; x < screenDimensions.x; x++) */
+                /*     { */
+                /*         cursorPosition.x = x; */
+                /*         cursorPosition.y = y; */
+
+                /*         if (GameMath.Equals(playerPosition, cursorPosition)) */
+                /*         { */
+                /*             Console.Write("@"); */
+                /*         } */
+                /*         else if (ratHealths[0] > 0 && GameMath.Equals(ratPositions[0], cursorPosition)) */
+                /*         { */
+                /*             Console.Write("R"); */
+                /*         } */
+                /*         else if (ratHealths[1] > 0 && GameMath.Equals(ratPositions[1], cursorPosition)) */
+                /*         { */
+                /*             Console.Write("R"); */
+                /*         } */
+                /*         else if (cougarHealth > 0 && GameMath.Equals(cougarPosition, cursorPosition)) */
+                /*         { */
+                /*             Console.Write("C"); */
+                /*         } */
+                /*         else if (ObstacleAtPosition(cursorPosition, obstacles, obstacleCount)) */
+                /*         { */
+                /*             Console.Write("#"); */
+                /*         } */
+                /*         else */
+                /*         { */
+                /*             Console.Write("."); */
+                /*         } */
+                /*     } */
+                /*     Console.WriteLine(); */
+                /* } */
 
 
 
@@ -934,11 +1170,9 @@ namespace richland_rpg
   
         static void Main(string[] args)
         {
-
-
             Game game = new Game();
-            game.GenerateObstacles(25);
-            game.PlacePlayer();
+            //game.GenerateObstacles(25);
+            //game.PlacePlayer();
             game.Update();
         }
     }
