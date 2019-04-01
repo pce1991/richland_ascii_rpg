@@ -343,19 +343,30 @@ namespace richland_rpg
                 // inherit from entity
             }
         }
+        
+        public Entity GetEntity(EntityHandle handle) {
+            Entity e = new Entity();
+            if (handle.IsValid() && EntityHandleIsValid(handle)) {
+                return entities[handle.index];   
+            }
+            
+            return e;
+        }
 
         public Player player;
         public List<Cougar> cougars = new List<Cougar>(64);
         public List<Grass> grass = new List<Grass>(500);
 
-        public void AddGrass(Grass g) {
+        public EntityHandle AddGrass(Grass g) {
             EntityHandle handle = AddEntity(EntityType.Grass, grass.Count);
             grass.Add(g);
+            return handle;
         }
 
-        public void AddPlayer(Player p) {
+        public EntityHandle AddPlayer(Player p) {
             EntityHandle handle = AddEntity(EntityType.Player, 0);
             player = p;
+            return handle;
         }
     }
 
@@ -573,11 +584,12 @@ namespace richland_rpg
 
         MyRandom random;
 
-        int playerID;
         int cougarID;
 
         EntityManager entityManager;
         Renderer renderer;
+        
+        EntityHandle playerHandle;
 
         public Game()
         {
@@ -610,8 +622,9 @@ namespace richland_rpg
             cougarPosition = new Vector2(4, 4);
             cougarStrength = 5;
 
-            playerID = 1;
             cougarID = 3;
+            
+            EntityHandle playerHandle;
 
             GenerateWorld();
         }
@@ -620,7 +633,7 @@ namespace richland_rpg
             GenerateGrass();
 
             Player p = new Player(new Vector2(5, 5));
-            entityManager.AddPlayer(p);
+            playerHandle = entityManager.AddPlayer(p);
         }
 
         void GenerateGrass() {
@@ -637,49 +650,6 @@ namespace richland_rpg
                 }
             }
         }
-
-        // An alternative to this idea is to make structs and store them in some way, it would be a MAJOR rewrite tho if we ever need dynamically added components
-        /*
-         * struct Grass
-        {
-            Vector2 position;
-            Renderable renderable;
-        }
-
-        // Don't think we can inherit
-        struct Rat
-        {
-            Vector2 position;
-            int health;
-            int strength;
-        }
-
-        class Actor
-        {
-            Renderable renderable;
-            Vector2 position;
-            int health;
-
-            // but we can't just iterate over all acotrs and AddToCollisionSystem, we have to do it for each derived type
-            void AddToCollisionSystem()
-            {
-
-            }
-        }
-
-        class Rat : Actor
-        {
-
-        }
-        */
-        // Maybe then we collect a bunch of the individual components like position into a separate buffer, 
-        // that way we can be smart about what we try to update (no need to add the position of grass that isn't near fire for instance)
-        // We still can write fairly generic systems for doing things like collision and rendering
-        // AddGrassToCollisionSystem()
-        // AddMonstersToCollisionSystem();
-        // GenerateCollisions();
-        // We could chunk that fairly well right? Might create problems when one chunk does something which should add collision stuff to another chunk
-        // This is a really complicated way to introduce doing more complex things, like this is not necessary for them to implement more features... 
 
         // @BUG: the count small enough that it can fit that many things within the range of randomly generated numbers
         public void GenerateObstacles(int count)
@@ -704,6 +674,18 @@ namespace richland_rpg
             {
                 playerPosition = new Vector2(random.Random(0, 12), random.Random(0, 12));
             }
+        }
+        
+        // This is gonna be a pain I think... and we'll probably have to do many functions like this which
+        // branch on the type 
+        void MoveEntity(EntityManager manager, EntityHandle handle, Vector2 direction) {
+               Entity e = manager.GetEntity(handle);
+            
+               switch (e.type) {
+                   case EntityType.Player : {
+                       manager.player.position = GameMath.Add(manager.player.position, direction);
+                   } break
+               }
         }
 
         Vector2 GetPlayerInput()
@@ -796,18 +778,18 @@ namespace richland_rpg
             public Vector2 directionA;
             public Vector2 directionB;
 
-            public int idA;
-            public int idB;
+            public EntityHandle handleA;
+            public EntityHandle handleB;
 
-            public Collision(Vector2 posA, Vector2 posB, Vector2 dirA, Vector2 dirB, int idA_, int idB_)
+            public Collision(Vector2 posA, Vector2 posB, Vector2 dirA, Vector2 dirB, EntityHandle a, EntityHandle b)
             {
                 positionA = posA;
                 postionB = posB;
                 directionA = dirA;
                 directionB = dirB;
 
-                idA = idA_;
-                idB = idB_;
+                handleA = a;
+                handleB = b;
             }
         }
 
@@ -849,7 +831,7 @@ namespace richland_rpg
 
                 // Player update
                 Vector2 movementDirection = GetPlayerInput();
-
+                MoveEntity(entityManager, playerHandle, movementDirection); 
                 playerPosition = GameMath.Add(playerPosition, movementDirection);
 
                 bool playerMoved = !GameMath.Equals(movementDirection, new Vector2(0, 0));
@@ -903,13 +885,14 @@ namespace richland_rpg
                 // cougar obstacle
                 // rat obstacle
                 // player obstacle
+                
 
                 for (int i = 0; i < 2; i++)
                 {
                     Vector2 ratDirection = new Vector2();
                     if (ratHealths[i] > 0 && CollisionSystem.Collides(playerPosition, ratPositions[i], movementDirection, ratDirection))
                     {
-                        collisions[collisionCount++] = new Collision(playerPosition, ratPositions[i], movementDirection, ratDirection, playerID, ratIDs[i]);
+                        collisions[collisionCount++] = new Collision(playerPosition, ratPositions[i], movementDirection, ratDirection, playerHandle, ratIDs[i]);
                         //collisions[collisionCount++] = new Collision(bigRatPosition, playerPosition, ratDirection, movementDirection, ratID, playerID);
                     }
                 }
