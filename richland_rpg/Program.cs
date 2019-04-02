@@ -170,6 +170,8 @@ namespace richland_rpg
             if (freeList.Count > 0) {
                 int index = freeList[freeList.Count - 1];
 
+                freeList.RemoveAt(freeList.Count - 1);
+
                 entities[index].SetType(type);
                 entities[index].SetIndex(index);
                 
@@ -241,13 +243,19 @@ namespace richland_rpg
                             SwapRemove(rats, e.index);
                             // Look at the entity that we just swapped into the old place, 
                             // set that entities index to be e.index
-                            idSwappedWith = rats[e.index].id;
+                            if (rats.Count > 0) {
+                               idSwappedWith = rats[e.index].id;
+                            }
                         } break;
 
                 }
 
-                entities[idSwappedWith].SetIndex(e.index);
+                if (idSwappedWith > 0) {
+                   entities[idSwappedWith].SetIndex(e.index);
+                }               
             }
+
+            entitiesToDelete.Clear();
         }
         
         public Entity GetEntity(EntityHandle handle) {
@@ -906,12 +914,15 @@ namespace richland_rpg
                     Entity a = entityManager.GetEntity(collision.handleA);
                     Entity b = entityManager.GetEntity(collision.handleB);
 
+                    EntityHandle ratHandle = collision.handleA;
+
                     if (a.type == EntityType.Player)
                     {
                         playerDirection_ = collision.directionA;
                         ratDirection_ = collision.directionB;
 
                         ratID = b.id;
+                        ratHandle = collision.handleB;
                     }
                     else if (a.type == EntityType.Player)
                     {
@@ -919,6 +930,7 @@ namespace richland_rpg
                         ratDirection_ = collision.directionA;
 
                         ratID = a.id;
+                        ratHandle = collision.handleA;
                     }
 
                     // @WARNING @BUG: 
@@ -942,6 +954,7 @@ namespace richland_rpg
                             ratIndex = 1;
                         }
 
+                        entityManager.DeleteEntity(ratHandle);
                         //ratHealths[ratIndex] -= 10;
 
 
@@ -1017,6 +1030,8 @@ namespace richland_rpg
                 {
                     messages[i].PrintMessage();
                 }
+
+                entityManager.DeleteEntities();
             }
         }
     }
