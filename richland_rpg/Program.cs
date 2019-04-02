@@ -112,6 +112,7 @@ namespace richland_rpg
         Cougar,
         Item,
         Grass,
+        Rat,
     }
 
     struct Entity
@@ -159,6 +160,11 @@ namespace richland_rpg
         List<Entity> entities = new List<Entity>(2048);
         List<int> freeList = new List<int>(256);
         List<int> entitiesToDelete = new List<int>(256);
+
+        public EntityManager() {
+            Entity invalidEntity = new Entity();
+            entities.Add(invalidEntity);
+        }       
 
         public EntityHandle AddEntity(EntityType type, int typeIndex) {
             if (freeList.Count > 0) {
@@ -222,6 +228,25 @@ namespace richland_rpg
                 entities[index].IncGeneration();
                 // @TODO: remove the objects from some array, maybe easier if we just
                 // inherit from entity
+
+                // We will swap the last item in a list with the item at the deleted entity's index
+                // And then change that entities index from the index of the last place in that
+                // list to its new place. 
+
+                int idSwappedWith = 0;
+                switch(e.type)
+                {
+                    case EntityType.Rat:
+                        {
+                            SwapRemove(rats, e.index);
+                            // Look at the entity that we just swapped into the old place, 
+                            // set that entities index to be e.index
+                            idSwappedWith = rats[e.index].id;
+                        } break;
+
+                }
+
+                entities[idSwappedWith].SetIndex(e.index);
             }
         }
         
@@ -234,9 +259,17 @@ namespace richland_rpg
             return e;
         }
 
+        public EntityHandle GetEntityHandle(int id) {
+            EntityHandle handle;
+            handle.index = id;
+            handle.generation = entities[id].generation;
+            return handle;
+        }
+
         public Player player;
         public List<Cougar> cougars = new List<Cougar>(64);
         public List<Grass> grass = new List<Grass>(500);
+        public List<Rat> rats = new List<Rat>(128);
 
         public EntityHandle AddGrass(Grass g) {
             EntityHandle handle = AddEntity(EntityType.Grass, grass.Count);
@@ -248,6 +281,24 @@ namespace richland_rpg
             EntityHandle handle = AddEntity(EntityType.Player, 0);
             player = p;
             return handle;
+        }
+
+        public EntityHandle AddRat(Rat r) {
+            EntityHandle handle = AddEntity(EntityType.Rat, 0);
+            r.id = entities[handle.index].id;
+            rats.Add(r);
+            return handle;
+        }
+
+        public void SwapRemove<T>(List<T> list, int index)
+        {
+            if (index == list.Count - 1) {
+                list.RemoveAt(list.Count - 1);
+            }
+            else {           
+                list[index] = list[list.Count - 1];
+                list.RemoveAt(list.Count - 1);
+            }
         }
     }
 
@@ -330,11 +381,21 @@ namespace richland_rpg
         }
 
         public void GatherRenderables(EntityManager manager, Camera camera) {
-
+            for (int i = 0; i < width * height; i++) {
+                renderData[i].layer = Layer.None;
+            }
+        
             for (int i = 0; i < manager.grass.Count; i++) {
                 Grass g = manager.grass[i];
 
                 TryAddToRenderables(camera, g.position, g.renderable, Layer.Floor);
+            }
+
+
+            for (int i = 0; i < manager.rats.Count; i++) {
+                Rat r = manager.rats[i];
+
+                TryAddToRenderables(camera, r.position, r.renderable, Layer.Ground);
             }
 
             TryAddToRenderables(camera, manager.player.position, manager.player.renderable, Layer.Ground);
@@ -415,13 +476,15 @@ namespace richland_rpg
     }
 
     struct Rat {
+        public int id;
         public Vector2 position;
         public Renderable renderable;
         
         public int health;
         public int strength;
         
-        Rat(Vector2 pos) {
+        public Rat(Vector2 pos) {
+            id = 0;
             position = pos;
 
             renderable.symbol = 'R';
@@ -448,14 +511,9 @@ namespace richland_rpg
 
         Vector2 screenDimensions;
 
-        Vector2 playerPosition;
         int playerHealth;
         int playerXP;
         int playerStrength;
-
-        Vector2[] ratPositions;
-        int[] ratHealths;
-        int[] ratIDs;
 
         Vector2 cougarPosition;
         int cougarHealth;
@@ -486,19 +544,6 @@ namespace richland_rpg
             playerHealth = 100;
             playerStrength = 2;
 
-            ratPositions = new Vector2[2];
-            ratHealths = new int[2];
-            ratIDs = new int[2];
-
-            ratPositions[0] = new Vector2(20, 12);
-            ratHealths[0] = 15;
-            ratIDs[0] = 2;
-
-            ratPositions[1] = new Vector2(10, 6);
-            ratHealths[1] = 15;
-
-            ratIDs[1] = 3;
-
 
             cougarHealth = 125;
             cougarPosition = new Vector2(4, 4);
@@ -516,6 +561,12 @@ namespace richland_rpg
 
             Player p = new Player(new Vector2(5, 5));
             playerHandle = entityManager.AddPlayer(p);
+
+            for (int i = 0; i < 2; i++) {
+                Rat r = new Rat(new Vector2(5 + (5 * i), 5));
+
+                entityManager.AddRat(r);
+            }
         }
 
         void GenerateGrass() {
@@ -545,18 +596,6 @@ namespace richland_rpg
                 obstacles[i] = new Vector2(random.Random(0, 15), random.Random(0, 15));
             }
         }
-
-        public void PlacePlayer()
-        {
-
-            playerPosition = new Vector2(random.Random(0, 12), random.Random(0, 12));
-
-            // @WARNING: could get infinite loop if the object density is high, and the range of player position is low
-            while (ObstacleAtPosition(playerPosition, obstacles, obstacleCount))
-            {
-                playerPosition = new Vector2(random.Random(0, 12), random.Random(0, 12));
-            }
-        }
         
         // This is gonna be a pain I think... and we'll probably have to do many functions like this which
         // branch on the type 
@@ -566,7 +605,7 @@ namespace richland_rpg
                switch (e.type) {
                    case EntityType.Player : {
                        manager.player.position = GameMath.Add(manager.player.position, direction);
-                   } break
+                   } break;
                }
         }
 
@@ -713,7 +752,11 @@ namespace richland_rpg
 
                 // Player update
                 Vector2 movementDirection = GetPlayerInput();
-                MoveEntity(entityManager, playerHandle, movementDirection); 
+                MoveEntity(entityManager, playerHandle, movementDirection);
+
+                Player player = entityManager.player;
+                Vector2 playerPosition = player.position;
+
                 playerPosition = GameMath.Add(playerPosition, movementDirection);
 
                 bool playerMoved = !GameMath.Equals(movementDirection, new Vector2(0, 0));
@@ -769,12 +812,14 @@ namespace richland_rpg
                 // player obstacle
                 
 
-                for (int i = 0; i < 2; i++)
+                for (int i = 0; i < entityManager.rats.Count; i++)
                 {
                     Vector2 ratDirection = new Vector2();
-                    if (ratHealths[i] > 0 && CollisionSystem.Collides(playerPosition, ratPositions[i], movementDirection, ratDirection))
+                    Rat rat = entityManager.rats[i];
+                    EntityHandle ratHandle = entityManager.GetEntityHandle(rat.id);
+                    if (rat.health > 0 && CollisionSystem.Collides(playerPosition, rat.position, movementDirection, ratDirection))
                     {
-                        collisions[collisionCount++] = new Collision(playerPosition, ratPositions[i], movementDirection, ratDirection, playerHandle, ratIDs[i]);
+                        collisions[collisionCount++] = new Collision(playerPosition, rat.position, movementDirection, ratDirection, playerHandle, ratHandle);
                         //collisions[collisionCount++] = new Collision(bigRatPosition, playerPosition, ratDirection, movementDirection, ratID, playerID);
                     }
                 }
@@ -858,19 +903,22 @@ namespace richland_rpg
 
                     int ratID = 0;
 
-                    if (collision.idA == 1)
+                    Entity a = entityManager.GetEntity(collision.handleA);
+                    Entity b = entityManager.GetEntity(collision.handleB);
+
+                    if (a.type == EntityType.Player)
                     {
                         playerDirection_ = collision.directionA;
                         ratDirection_ = collision.directionB;
 
-                        ratID = collision.idB;
+                        ratID = b.id;
                     }
-                    else if (collision.idB == 1)
+                    else if (a.type == EntityType.Player)
                     {
                         playerDirection_ = collision.directionB;
                         ratDirection_ = collision.directionA;
 
-                        ratID = collision.idA;
+                        ratID = a.id;
                     }
 
                     // @WARNING @BUG: 
@@ -894,10 +942,10 @@ namespace richland_rpg
                             ratIndex = 1;
                         }
 
-                        ratHealths[ratIndex] -= 10;
+                        //ratHealths[ratIndex] -= 10;
 
 
-                        ratPositions[ratIndex] = GameMath.Add(ratPositions[ratIndex], movementDirection);
+                        //ratPositions[ratIndex] = GameMath.Add(ratPositions[ratIndex], movementDirection);
 
                         messages[messageCount++] = new Message("Rat", "Player", 10);
                     }
@@ -910,6 +958,7 @@ namespace richland_rpg
                 camera.dimensions = new Vector2(screenDimensions);
                 renderer.GatherRenderables(entityManager, camera);
                 renderer.Render();
+                
 
                 // Instead of this just put things in a string and print it
 
