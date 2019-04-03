@@ -294,6 +294,11 @@ namespace richland_rpg
         public EntityHandle AddRat(Rat r) {
             EntityHandle handle = AddEntity(EntityType.Rat, 0);
             r.id = entities[handle.index].id;
+
+            Entity e = entities[r.id];
+            e.index = rats.Count;
+            entities[r.id] = e;
+            
             rats.Add(r);
             return handle;
         }
@@ -426,6 +431,16 @@ namespace richland_rpg
         public char symbol;
     };
 
+    struct Stats {
+        public int health;
+        
+        public int strength;
+
+        public void Damage(int dmg) {
+            health -= dmg;
+        }
+    }
+
     struct Player {
         public EntityHandle entityHandle;
 
@@ -488,8 +503,7 @@ namespace richland_rpg
         public Vector2 position;
         public Renderable renderable;
         
-        public int health;
-        public int strength;
+        public Stats stats;
         
         public Rat(Vector2 pos) {
             id = 0;
@@ -497,8 +511,9 @@ namespace richland_rpg
 
             renderable.symbol = 'R';
 
-            health = 25;
-            strength = 5;
+            stats = new Stats();
+            stats.health = 25;
+            stats.strength = 5;
         }
     }
 
@@ -825,7 +840,7 @@ namespace richland_rpg
                     Vector2 ratDirection = new Vector2();
                     Rat rat = entityManager.rats[i];
                     EntityHandle ratHandle = entityManager.GetEntityHandle(rat.id);
-                    if (rat.health > 0 && CollisionSystem.Collides(playerPosition, rat.position, movementDirection, ratDirection))
+                    if (CollisionSystem.Collides(playerPosition, rat.position, movementDirection, ratDirection))
                     {
                         collisions[collisionCount++] = new Collision(playerPosition, rat.position, movementDirection, ratDirection, playerHandle, ratHandle);
                         //collisions[collisionCount++] = new Collision(bigRatPosition, playerPosition, ratDirection, movementDirection, ratID, playerID);
@@ -915,6 +930,7 @@ namespace richland_rpg
                     Entity b = entityManager.GetEntity(collision.handleB);
 
                     EntityHandle ratHandle = collision.handleA;
+                    
 
                     if (a.type == EntityType.Player)
                     {
@@ -933,6 +949,8 @@ namespace richland_rpg
                         ratHandle = collision.handleA;
                     }
 
+                    Entity ratEntity = entityManager.GetEntity(ratHandle);
+                    Rat rat = entityManager.rats[ratEntity.index];
                     // @WARNING @BUG: 
                     // @NOTE: we're assuming that directionA is player
                     if (GameMath.IsZero(playerDirection_))
@@ -944,21 +962,12 @@ namespace richland_rpg
 
                     if (GameMath.IsZero(ratDirection_))
                     {
-                        int ratIndex = 0;
-                        if (ratID == 2)
-                        {
-                            ratIndex = 0;
-                        }
-                        if (ratID == 3)
-                        {
-                            ratIndex = 1;
-                        }
 
-                        entityManager.DeleteEntity(ratHandle);
-                        //ratHealths[ratIndex] -= 10;
-
-
-                        //ratPositions[ratIndex] = GameMath.Add(ratPositions[ratIndex], movementDirection);
+                        //entityManager.DeleteEntity(ratHandle);
+                        
+                        rat.stats.Damage(10);
+                        rat.position = GameMath.Add(rat.position, movementDirection);
+                        entityManager.rats[ratEntity.index] = rat;
 
                         messages[messageCount++] = new Message("Rat", "Player", 10);
                     }
@@ -1110,6 +1119,16 @@ namespace richland_rpg
         static void Main(string[] args)
         {
             Game game = new Game();
+
+
+            Entity e = new Entity();
+
+            Entity[] entities = new Entity[16];
+            entities[0] = e;
+            entities[1] = e;
+
+            entities[1].SetIndex(4);
+
             //game.GenerateObstacles(25);
             //game.PlacePlayer();
             game.Update();
