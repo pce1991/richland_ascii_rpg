@@ -81,6 +81,25 @@ namespace richland_rpg
             else { return b; }
         }
 
+        static public Vector2 Clamp(Vector2 a, Vector2 min, Vector2 max) {
+            Vector2 result = new Vector2(a);
+            if (a.x < min.x) {
+                result.x = min.x;
+            }
+            if (a.x > max.x) {
+                result.x = max.x;
+            }
+
+            if (a.y < min.y) {
+                result.y = min.y;
+            }
+            if (a.y > max.y) {
+                result.y = max.y;
+            }
+
+            return result;
+        }
+
         static public bool PointOnAxisAlignedSegment(Vector2 a, Vector2 b, Vector2 p)
         {
             int maxX = Max(a.x, b.x);
@@ -289,7 +308,7 @@ namespace richland_rpg
             }
         }
         
-                public Player player;
+        public Player player;
         public List<Cougar> cougars = new List<Cougar>(64);
         public List<Grass> grass = new List<Grass>(500);
         public List<Rat> rats = new List<Rat>(128);
@@ -375,6 +394,7 @@ namespace richland_rpg
                 // @TODO: all relative to top left of camera
                 RenderData data = new RenderData();
 
+                // GET THE POSITION RELATIVE TO THE CAMERA
                 data.position = GameMath.Sub(point, camera.position);
                 data.c = renderable.symbol;
                 data.layer = layer;
@@ -389,7 +409,6 @@ namespace richland_rpg
                 
                     characters[characterIndex] = data.c;
                 }
-                
             }
         }
 
@@ -532,6 +551,9 @@ namespace richland_rpg
     {
         bool running = true;
 
+        Vector2 worldDimensions;
+        Vector2 worldOrigin;
+
         Vector2 screenDimensions;
         MyRandom random;
 
@@ -547,6 +569,9 @@ namespace richland_rpg
 
             screenDimensions = new Vector2(24, 16);
 
+            worldDimensions = new Vector2(100, 100);
+            worldOrigin = new Vector2(0, 0);
+
             entityManager = new EntityManager();
             renderer = new Renderer(screenDimensions.x, screenDimensions.y);
 
@@ -558,22 +583,26 @@ namespace richland_rpg
         void GenerateWorld() {
             GenerateGrass();
 
-            Player p = new Player(new Vector2(5, 5));
-            playerHandle = entityManager.AddPlayer(p);
+            Player player = new Player(new Vector2(12, 8));
+            playerHandle = entityManager.AddPlayer(player);
 
             for (int i = 0; i < 2; i++) {
                 Rat r = new Rat(new Vector2(5 + (5 * i), 5));
 
                 entityManager.AddRat(r);
             }
+
+            Rat r_ = new Rat(new Vector2(30, 2));
+
+            entityManager.AddRat(r_);            
         }
 
         void GenerateGrass() {
             Vector2 cursorPosition = new Vector2(0, 0);
             Grass grass = new Grass(cursorPosition);
 
-            for (int y = 0; y < screenDimensions.y; y++) {
-                for (int x = 0; x < screenDimensions.x; x++) {
+            for (int y = 0; y < worldDimensions.y; y++) {
+                for (int x = 0; x < worldDimensions.x; x++) {
                     cursorPosition.x = x;
                     cursorPosition.y = y;
 
@@ -590,9 +619,14 @@ namespace richland_rpg
             
                switch (e.type) {
                    case EntityType.Player : {
+                       
                        manager.player.position = GameMath.Add(manager.player.position, direction);
+                       
+                       manager.player.position = GameMath.Clamp(manager.player.position, new Vector2(0, 0), worldDimensions);
                    } break;
                }
+
+               
         }
 
         Vector2 GetPlayerInput()
@@ -743,26 +777,34 @@ namespace richland_rpg
                 Player player = entityManager.player;
                 Vector2 playerPosition = player.position;
 
-                playerPosition = GameMath.Add(playerPosition, movementDirection);
-
                 bool playerMoved = !GameMath.Equals(movementDirection, new Vector2(0, 0));
 
 
                 bool playerMoveInvalid = false;
 
+                // WARNING: this is crap code that shoudl be deleted pretty soon
                 if (playerMoveInvalid)
                 {
                     playerPosition.x -= movementDirection.x;
                     playerPosition.y -= movementDirection.y;
                 }
 
+
                 // Render
                 Console.Clear();
 
                 Camera camera = new Camera();
-                camera.dimensions = new Vector2(screenDimensions);
+                camera.dimensions = GameMath.Sub(new Vector2(screenDimensions), new Vector2(1, 1));
+
+                Vector2 camOffset = new Vector2(12, 8);
+                camera.position = GameMath.Sub(playerPosition, camOffset);
+                camera.position = GameMath.Clamp(camera.position, worldOrigin, worldDimensions);
+
                 renderer.GatherRenderables(entityManager, camera);
                 renderer.Render();
+
+
+                Console.WriteLine(playerPosition.x + " " + playerPosition.y);
 
                 for (int i = 0; i < messageCount; i++)
                 {
