@@ -533,21 +533,7 @@ namespace richland_rpg
         bool running = true;
 
         Vector2 screenDimensions;
-
-        int playerHealth;
-        int playerXP;
-        int playerStrength;
-
-        Vector2 cougarPosition;
-        int cougarHealth;
-        int cougarStrength;
-
-        int obstacleCount;
-        Vector2[] obstacles;
-
         MyRandom random;
-
-        int cougarID;
 
         EntityManager entityManager;
         Renderer renderer;
@@ -564,16 +550,6 @@ namespace richland_rpg
             entityManager = new EntityManager();
             renderer = new Renderer(screenDimensions.x, screenDimensions.y);
 
-            playerHealth = 100;
-            playerStrength = 2;
-
-
-            cougarHealth = 125;
-            cougarPosition = new Vector2(4, 4);
-            cougarStrength = 5;
-
-            cougarID = 3;
-            
             EntityHandle playerHandle;
 
             GenerateWorld();
@@ -607,19 +583,6 @@ namespace richland_rpg
             }
         }
 
-        // @BUG: the count small enough that it can fit that many things within the range of randomly generated numbers
-        public void GenerateObstacles(int count)
-        {
-            obstacleCount = count;
-
-            obstacles = new Vector2[count];
-
-            for (int i = 0; i < count; i++)
-            {
-                obstacles[i] = new Vector2(random.Random(0, 15), random.Random(0, 15));
-            }
-        }
-        
         // This is gonna be a pain I think... and we'll probably have to do many functions like this which
         // branch on the type 
         void MoveEntity(EntityManager manager, EntityHandle handle, Vector2 direction) {
