@@ -123,6 +123,22 @@ namespace richland_rpg
 
             return withinWidth && withinHeight;
         }
+
+        public static bool PointInRect(Vector2 topLeft, Vector2 dimensions, int x, int y) {
+            bool withinWidth  = x >= topLeft.x && x <= topLeft.x + dimensions.x;
+            bool withinHeight = y >= topLeft.y && y <= topLeft.y + dimensions.y;
+
+            return withinWidth && withinHeight;
+        }
+
+
+        public static bool PointInRect(Rect rect, Vector2 position) {
+            return PointInRect(rect.position, rect.dimensions, position);
+        }
+
+        public static bool PointInRect(Rect rect, int x, int y) {
+            return PointInRect(rect.position, rect.dimensions, x, y);
+        }
     }
 
   enum EntityType
@@ -131,7 +147,10 @@ namespace richland_rpg
         Character,
         Cougar,
         Item,
-        Grass,
+        Grass, // /
+        Snow,  // .
+        Water, // ~
+        Sand, // ,
         Rat,
     }
 
@@ -311,11 +330,25 @@ namespace richland_rpg
         public Player player;
         public List<Cougar> cougars = new List<Cougar>(64);
         public List<Grass> grass = new List<Grass>(500);
+        public List<Snow> snow = new List<Snow>(500);
+        public List<Water> water = new List<Water>(500);
         public List<Rat> rats = new List<Rat>(128);
 
         public EntityHandle AddGrass(Grass g) {
             EntityHandle handle = AddEntity(EntityType.Grass, grass.Count);
             grass.Add(g);
+            return handle;
+        }
+
+        public EntityHandle AddSnow(Snow s) {
+            EntityHandle handle = AddEntity(EntityType.Snow, snow.Count);
+            snow.Add(s);
+            return handle;
+        }
+
+        public EntityHandle AddWater(Water s) {
+            EntityHandle handle = AddEntity(EntityType.Water, water.Count);
+            water.Add(s);
             return handle;
         }
 
@@ -416,13 +449,19 @@ namespace richland_rpg
             for (int i = 0; i < width * height; i++) {
                 renderData[i].layer = Layer.None;
             }
-        
+
+            // @GACK: its a pain to do this for every type... 
             for (int i = 0; i < manager.grass.Count; i++) {
                 Grass g = manager.grass[i];
 
                 TryAddToRenderables(camera, g.position, g.renderable, Layer.Floor);
             }
 
+            for (int i = 0; i < manager.snow.Count; i++) {
+                Snow g = manager.snow[i];
+
+                TryAddToRenderables(camera, g.position, g.renderable, Layer.Floor);
+            }
 
             for (int i = 0; i < manager.rats.Count; i++) {
                 Rat r = manager.rats[i];
@@ -547,12 +586,33 @@ namespace richland_rpg
         }
     }
 
+    struct Snow {
+        public Vector2 position;
+        public Renderable renderable;
+        
+        public Snow(Vector2 pos) {
+            position = pos;
+            renderable.symbol = '.';
+        }
+    }
+
+    struct Water {
+        public Vector2 position;
+        public Renderable renderable;
+        
+        public Water(Vector2 pos) {
+            position = pos;
+            renderable.symbol = '.';
+        }
+    }
+
     class Game
     {
         bool running = true;
 
         Vector2 worldDimensions;
         Vector2 worldOrigin;
+        Vector2 worldCoordinatesMax;
 
         Vector2 screenDimensions;
         MyRandom random;
@@ -572,6 +632,8 @@ namespace richland_rpg
             worldDimensions = new Vector2(100, 100);
             worldOrigin = new Vector2(0, 0);
 
+            worldCoordinatesMax = GameMath.Sub(worldDimensions, new Vector2(1, 1));
+
             entityManager = new EntityManager();
             renderer = new Renderer(screenDimensions.x, screenDimensions.y);
 
@@ -580,8 +642,52 @@ namespace richland_rpg
             GenerateWorld();
         }
 
+        void GenerateBiomes() {
+            int biomeCount = 4;
+            
+            Rect[] biomeRegions = new Rect[biomeCount];
+
+            Vector2 biomeDimensions = new Vector2(worldDimensions.x / biomeCount,
+                                                  worldDimensions.y / biomeCount);
+
+            biomeRegions[0].dimensions = biomeDimensions;
+
+            biomeRegions[1].position = new Vector2(biomeDimensions.x, 0);
+            biomeRegions[1].dimensions = biomeDimensions;
+
+            biomeRegions[2].position = new Vector2(0, biomeDimensions.y);
+            biomeRegions[2].dimensions = biomeDimensions;
+
+            biomeRegions[3].position = new Vector2(biomeDimensions.x, biomeDimensions.y);
+            biomeRegions[3].dimensions = biomeDimensions;
+
+            Vector2 cursorPosition = new Vector2(0, 0);
+            Grass g = new Grass(cursorPosition);
+            Snow s = new Snow(cursorPosition);
+            for (int y = 0; y < worldDimensions.y; y++) {
+                for (int x = 0; x < worldDimensions.x; x++) {
+                    cursorPosition.x = x;
+                    cursorPosition.y = y;
+                    
+                    if (GameMath.PointInRect(biomeRegions[0], cursorPosition)) {
+                        g = new Grass(cursorPosition);
+                        entityManager.AddGrass(g);
+                    }
+                    else if (GameMath.PointInRect(biomeRegions[1], cursorPosition)) {
+                        s = new Snow(cursorPosition);
+                        entityManager.AddSnow(s);
+                    }
+                    else {
+                        g = new Grass(cursorPosition);
+                        entityManager.AddGrass(g);
+                    }
+                }
+            }
+        }
+
         void GenerateWorld() {
-            GenerateGrass();
+            //GenerateGrass();
+            GenerateBiomes();
 
             Player player = new Player(new Vector2(12, 8));
             playerHandle = entityManager.AddPlayer(player);
@@ -622,7 +728,7 @@ namespace richland_rpg
                        
                        manager.player.position = GameMath.Add(manager.player.position, direction);
                        
-                       manager.player.position = GameMath.Clamp(manager.player.position, new Vector2(0, 0), worldDimensions);
+                       manager.player.position = GameMath.Clamp(manager.player.position, new Vector2(0, 0), worldCoordinatesMax);
                    } break;
                }
 
@@ -798,7 +904,15 @@ namespace richland_rpg
 
                 Vector2 camOffset = new Vector2(12, 8);
                 camera.position = GameMath.Sub(playerPosition, camOffset);
-                camera.position = GameMath.Clamp(camera.position, worldOrigin, worldDimensions);
+                
+                Vector2 maxCameraPosition = GameMath.Sub(worldCoordinatesMax, camera.dimensions);
+
+                camera.position = GameMath.Clamp(camera.position, worldOrigin, maxCameraPosition);
+
+                
+
+                // if the camera dimensions are 23, then the camera top left must be 23 away
+                // from the border
 
                 renderer.GatherRenderables(entityManager, camera);
                 renderer.Render();
